@@ -46,4 +46,7 @@ export class SecurityConfiguration {
     cdnSignatureDuration: string = "24h";
     cdnSignatureIncludeIp: boolean = true;
     cdnSignatureIncludeUserAgent: boolean = true;
+    // CORS allowed origins. Empty array means all origins are allowed (default for backwards compatibility).
+    // Set to specific origins (e.g. ["https://app.spacebar.chat"]) to restrict cross-origin access.
+    allowedOrigins: string[] = [];
 }

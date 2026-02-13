@@ -17,19 +17,33 @@
 */
 
 import { NextFunction, Request, Response } from "express";
-
-// TODO: config settings
+import { Config } from "@spacebar/util";
 
 export function CORS(req: Request, res: Response, next: NextFunction) {
-    res.set("Access-Control-Allow-Credentials", "true");
+    const { allowedOrigins } = Config.get().security;
+    const requestOrigin = req.header("Origin");
+
+    // If allowedOrigins is configured, validate the origin
+    if (allowedOrigins && allowedOrigins.length > 0) {
+        if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+            res.set("Access-Control-Allow-Origin", requestOrigin);
+            res.set("Access-Control-Allow-Credentials", "true");
+        }
+        // If origin is not in the whitelist, don't set CORS headers (browser will block the request)
+    } else {
+        // Backwards-compatible: allow all origins
+        res.set("Access-Control-Allow-Origin", requestOrigin ?? "*");
+        res.set("Access-Control-Allow-Credentials", "true");
+    }
+
     res.set("Access-Control-Allow-Headers", req.header("Access-Control-Request-Headers") || "*");
     res.set("Access-Control-Allow-Methods", req.header("Access-Control-Request-Method") || "*");
-    res.set("Access-Control-Allow-Origin", req.header("Origin") ?? "*");
-    res.set("Access-Control-Max-Age", "5"); // dont make it too long so we can change it dynamically
-    // TODO: use better CSP
+    res.set("Access-Control-Max-Age", "86400");
+
+    // Restrictive Content-Security-Policy
     res.set(
-        "Content-security-policy",
-        "default-src *  data: blob: filesystem: about: ws: wss: 'unsafe-inline' 'unsafe-eval'; script-src * data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src * data: blob: 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src * data: blob: ; style-src * data: blob: 'unsafe-inline'; font-src * data: blob: 'unsafe-inline';",
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss:; font-src 'self'; frame-ancestors 'none'",
     );
 
     if (req.method === "OPTIONS") {
