@@ -89,7 +89,8 @@ export class Snowflake {
         const time = BigInt(Date.now() - Snowflake.EPOCH) << BigInt(22);
         const worker = Snowflake.workerId << 17n;
         const process = Snowflake.processId << 12n;
-        const increment = Snowflake.INCREMENT++;
+        const increment = Snowflake.INCREMENT;
+        Snowflake.INCREMENT = (Snowflake.INCREMENT + 1n) & 4095n;
         return BigInt(time | worker | process | increment);
     }
 
