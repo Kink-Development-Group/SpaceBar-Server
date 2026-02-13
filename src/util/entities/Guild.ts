@@ -365,18 +365,14 @@ export class Guild extends BaseClass {
         // create custom roles if provided
         if (body.roles && body.roles.length) {
             await Promise.all(
-                body.roles?.map((role) => {
-                    new Promise((resolve) => {
-                        Role.create({
-                            ...role,
-                            guild_id,
-                            id:
-                                // role.id === body.template_guild_id indicates that this is the @everyone role
-                                role.id === body.template_guild_id ? guild_id : Snowflake.generate(),
-                        })
-                            .save()
-                            .then(resolve);
-                    });
+                body.roles.map((role) => {
+                    return Role.create({
+                        ...role,
+                        guild_id,
+                        id:
+                            // role.id === body.template_guild_id indicates that this is the @everyone role
+                            role.id === body.template_guild_id ? guild_id : Snowflake.generate(),
+                    }).save();
                 }),
             );
         }
