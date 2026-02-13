@@ -21,7 +21,7 @@ import { BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, JoinTabl
 import { Ban, Channel, PublicGuildRelations } from ".";
 import { ReadyGuildDTO } from "../dtos";
 import { GuildCreateEvent, GuildDeleteEvent, GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent, MessageCreateEvent } from "../interfaces";
-import { Config, emitEvent } from "../util";
+import { Config, emitEvent, getDatabase } from "../util";
 import { DiscordApiErrors } from "../util/Constants";
 import { BaseClassWithoutId } from "./BaseClass";
 import { Guild } from "./Guild";
@@ -187,14 +187,17 @@ export class Member extends BaseClassWithoutId {
             relations: { user: true },
         });
 
-        // use promise all to execute all promises at the same time -> save time
-        return Promise.all([
-            Member.delete({
-                id: user_id,
-                guild_id,
-            }),
-            Guild.decrement({ id: guild_id }, "member_count", 1),
+        const db = getDatabase();
+        if (!db) throw new Error("Database not initialized");
 
+        // Use a transaction to ensure atomicity of member removal + count decrement
+        await db.transaction(async (manager) => {
+            await manager.delete(Member, { id: user_id, guild_id });
+            await manager.decrement(Guild, { id: guild_id }, "member_count", 1);
+        });
+
+        // Events are emitted outside the transaction (non-critical, idempotent)
+        await Promise.all([
             emitEvent({
                 event: "GUILD_DELETE",
                 data: {
@@ -360,29 +363,37 @@ export class Member extends BaseClassWithoutId {
             bio: "",
         };
 
+        const db = getDatabase();
+        if (!db) throw new Error("Database not initialized");
+
+        // Use a transaction for the critical member insert + count increment
+        await db.transaction(async (manager) => {
+            await manager.save(
+                Member.create({
+                    ...member,
+                    roles: [Role.create({ id: guild_id })],
+                    settings: {
+                        guild_id: null,
+                        mute_config: null,
+                        mute_scheduled_events: false,
+                        flags: 0,
+                        hide_muted_channels: false,
+                        notify_highlights: 0,
+                        channel_overrides: {},
+                        message_notifications: guild.default_message_notifications,
+                        mobile_push: true,
+                        muted: false,
+                        suppress_everyone: false,
+                        suppress_roles: false,
+                        version: 0,
+                    },
+                }),
+            );
+            await manager.increment(Guild, { id: guild_id }, "member_count", 1);
+        });
+
+        // Events emitted outside transaction (non-critical)
         await Promise.all([
-            Member.create({
-                ...member,
-                roles: [Role.create({ id: guild_id })],
-                // read_state: {},
-                settings: {
-                    guild_id: null,
-                    mute_config: null,
-                    mute_scheduled_events: false,
-                    flags: 0,
-                    hide_muted_channels: false,
-                    notify_highlights: 0,
-                    channel_overrides: {},
-                    message_notifications: guild.default_message_notifications,
-                    mobile_push: true,
-                    muted: false,
-                    suppress_everyone: false,
-                    suppress_roles: false,
-                    version: 0,
-                },
-                // Member.save is needed because else the roles relations wouldn't be updated
-            }).save(),
-            Guild.increment({ id: guild_id }, "member_count", 1),
             emitEvent({
                 event: "GUILD_MEMBER_ADD",
                 data: {
