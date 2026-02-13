@@ -149,6 +149,11 @@ export const checkToken = (
         logAuth("Decoded token: " + JSON.stringify(dec));
 
         if (dec.header.alg == "HS256" && Config.get().security.jwtSecret !== null) {
+            console.warn(
+                "[AUTH] WARNING: Legacy HS256 token detected. HS256 support is deprecated and will be removed in a future version. " +
+                    "Please have the user re-authenticate to obtain an ES512 token. " +
+                    "To disable HS256 support, set security.jwtSecret to null in your configuration.",
+            );
             legacyVersion = 1;
             jwt.verify(token, Config.get().security.jwtSecret!, { algorithms: ["HS256"] }, validateUser);
         } else if (dec.header.alg == "ES512") {

@@ -24,6 +24,7 @@ export class SecurityConfiguration {
     twoFactor: TwoFactorConfiguration = new TwoFactorConfiguration();
     autoUpdate: boolean | number = true;
     requestSignature: string = crypto.randomBytes(32).toString("base64");
+    /** @deprecated Legacy HS256 JWT secret. Set to null to disable HS256 token support (recommended). Will be removed in a future version. */
     jwtSecret: string | null = null;
     // header to get the real user ip address
     // X-Forwarded-For for nginx/reverse proxies
