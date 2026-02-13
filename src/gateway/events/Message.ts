@@ -25,6 +25,7 @@ import WS from "ws";
 import OPCodeHandlers from "../opcodes";
 import { check } from "../opcodes/instanceOf";
 import { PayloadSchema } from "@spacebar/schemas";
+import { checkGatewayRateLimit } from "../util/GatewayRateLimit";
 
 const bigIntJson = BigIntJson({ storeAsString: true });
 
@@ -83,6 +84,9 @@ export async function Message(this: WebSocket, buffer: WS.Data) {
     }
 
     check.call(this, PayloadSchema, data);
+
+    // Check gateway rate limit (120 commands per 60 seconds, like Discord)
+    if (!checkGatewayRateLimit(this)) return;
 
     const OPCodeHandler = OPCodeHandlers[data.op];
     if (!OPCodeHandler) {

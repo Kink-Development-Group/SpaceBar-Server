@@ -30,6 +30,7 @@ import { URL } from "url";
 import { Config, ErlpackType } from "@spacebar/util";
 import zlib from "node:zlib";
 import { Decoder, Encoder } from "@toondepauw/node-zstd";
+import { initGatewayRateLimit, cleanupGatewayRateLimit } from "../util/GatewayRateLimit";
 
 let erlpack: ErlpackType | null = null;
 try {
@@ -38,7 +39,6 @@ try {
     console.log("Failed to import @yukikaze-bot/erlpack: ", e);
 }
 
-// TODO: check rate limit
 // TODO: specify rate limit in config
 // TODO: check msg max size
 
@@ -49,6 +49,7 @@ export async function Connection(this: WS.Server, socket: WebSocket, request: In
     socket.on("close", () => {
         const index = openConnections.indexOf(socket);
         if (index !== -1) openConnections.splice(index, 1);
+        cleanupGatewayRateLimit(socket);
     });
 
     const forwardedFor = Config.get().security.forwardedFor;
@@ -137,6 +138,12 @@ export async function Connection(this: WS.Server, socket: WebSocket, request: In
         socket.member_events = {};
         socket.permissions = {};
         socket.sequence = 0;
+
+        // Initialize rate limiting and check per-IP connection limit
+        if (!initGatewayRateLimit(socket)) {
+            console.warn(`[Gateway] Too many connections from ${ipAddress}, rejecting`);
+            return socket.close(CLOSECODES.Rate_limited);
+        }
 
         setHeartbeat(socket);
 
