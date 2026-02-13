@@ -74,6 +74,20 @@ export class SpacebarServer extends Server {
         this.app.set("json replacer", JSONReplacer);
         this.app.disable("x-powered-by");
 
+        // Security headers
+        this.app.use((req, res, next) => {
+            res.set("X-Content-Type-Options", "nosniff");
+            res.set("X-Frame-Options", "DENY");
+            res.set("X-XSS-Protection", "0"); // modern browsers use CSP, this header can introduce vulnerabilities
+            res.set("Referrer-Policy", "strict-origin-when-cross-origin");
+            res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+            if (Config.get().security.trustedProxies) {
+                // Only set HSTS if behind a reverse proxy (likely HTTPS)
+                res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+            }
+            next();
+        });
+
         const trustedProxies = Config.get().security.trustedProxies;
         if (trustedProxies) this.app.set("trust proxy", trustedProxies);
 
