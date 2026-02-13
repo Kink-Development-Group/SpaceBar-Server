@@ -179,11 +179,13 @@ export async function generateToken(id: string, isAdminSession: boolean = false)
 
     return new Promise((res, rej) => {
         const payload = { id, iat, kid: keyPair.fingerprint, ver: CurrentTokenFormatVersion, did: newSession.session_id } as UserTokenData["decoded"];
+        const jwtExpiry = Config.get().security.jwtExpiry;
         jwt.sign(
             payload,
             keyPair.privateKey,
             {
                 algorithm: "ES512",
+                ...(jwtExpiry > 0 ? { expiresIn: jwtExpiry } : {}),
             },
             (err, token) => {
                 if (err) return rej(err);

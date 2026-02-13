@@ -46,4 +46,6 @@ export class SecurityConfiguration {
     cdnSignatureDuration: string = "24h";
     cdnSignatureIncludeIp: boolean = true;
     cdnSignatureIncludeUserAgent: boolean = true;
+    // JWT token expiry duration in seconds. Default: 7 days (604800s). Set to 0 to disable expiry (not recommended).
+    jwtExpiry: number = 604800;
 }
