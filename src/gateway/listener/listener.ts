@@ -30,6 +30,7 @@ import {
     NewUrlUserSignatureData,
     GuildMemberAddEvent,
     Ban,
+    Intents,
 } from "@spacebar/util";
 import { OPCODES } from "../util/Constants";
 import { Send } from "../util/Send";
@@ -41,11 +42,61 @@ import { PublicMember, RelationshipType } from "@spacebar/schemas";
 import { bgRedBright } from "picocolors";
 
 // TODO: close connection on Invalidated Token
-// TODO: check intent
 // TODO: Guild Member Update is sent for current-user updates regardless of whether the GUILD_MEMBERS intent is set.
 
 // Sharding: calculate if the current shard id matches the formula: shard_id = (guild_id >> 22) % num_shards
 // https://discord.com/developers/docs/topics/gateway#sharding
+
+/**
+ * Build a reverse lookup: event name -> intent bit(s) required.
+ * Used for filtering events based on the client's declared intents.
+ */
+function buildEventToIntentMap(intentMap: Record<number, string[]>): Map<string, bigint[]> {
+    const result = new Map<string, bigint[]>();
+    for (const [bitStr, events] of Object.entries(intentMap)) {
+        const bit = BigInt(1) << BigInt(bitStr);
+        for (const event of events) {
+            const trimmedEvent = event.trim();
+            const existing = result.get(trimmedEvent) || [];
+            existing.push(bit);
+            result.set(trimmedEvent, existing);
+        }
+    }
+    return result;
+}
+
+const guildEventToIntents = buildEventToIntentMap(Intents.GUILD_INTENT_TO_EVENTS_MAP as unknown as Record<number, string[]>);
+const dmEventToIntents = buildEventToIntentMap(Intents.DM_INTENT_TO_EVENTS_MAP as unknown as Record<number, string[]>);
+const globalEventToIntents = buildEventToIntentMap(Intents.INTENT_TO_EVENTS_MAP as unknown as Record<number, string[]>);
+
+/**
+ * Check if the given event is allowed by the client's intents.
+ * @param intents The client's intent bitfield
+ * @param event The event name
+ * @param isGuildContext Whether the event originates from a guild (vs DM)
+ * @returns true if the event should be sent
+ */
+function isEventAllowedByIntents(intents: Intents, event: string, isGuildContext: boolean): boolean {
+    if (!intents) return true; // no intents = send everything (backwards compat)
+
+    const intentBits = intents.bitfield;
+
+    // Check global intent map first
+    const globalBits = globalEventToIntents.get(event);
+    if (globalBits) {
+        return globalBits.some((bit) => (intentBits & bit) !== 0n);
+    }
+
+    // Check context-specific intent map
+    const contextMap = isGuildContext ? guildEventToIntents : dmEventToIntents;
+    const contextBits = contextMap.get(event);
+    if (contextBits) {
+        return contextBits.some((bit) => (intentBits & bit) !== 0n);
+    }
+
+    // Events not mapped to any intent are "passthrough" and always sent
+    return true;
+}
 
 export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data }: EventOpts) {
     acknowledge?.();
@@ -343,6 +394,13 @@ async function consume(this: WebSocket, opts: EventOpts) {
             console.log(bgRedBright("[Gateway]"), "[GUILD_MEMBER_ADD] roles is undefined, setting to empty array!", opts.origin ?? "(Event origin not defined)", data);
             (data as PublicMember).roles = [];
         }
+    }
+
+    // Intent-based filtering: check if the client has the required intent for this event
+    // guild_id in data indicates a guild context, otherwise it's a DM context
+    const isGuildContext = !!data.guild_id;
+    if (!isEventAllowedByIntents(this.intents, event, isGuildContext)) {
+        return; // client didn't request this intent, drop the event
     }
 
     await Send(this, {
