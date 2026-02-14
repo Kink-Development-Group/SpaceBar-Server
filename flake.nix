@@ -41,12 +41,17 @@
                 default = pkgs.dockerTools.buildLayeredImage {
                   name = "spacebar-server-ts";
                   tag = builtins.replaceStrings [ "+" ] [ "_" ] self.packages.${system}.default.version;
-                  contents = [ self.packages.${system}.default ];
+                  contents = [
+                    self.packages.${system}.default
+                    pkgs.dockerTools.binSh
+                    pkgs.dockerTools.usrBinEnv
+                    pkgs.dockerTools.caCertificates
+                  ];
                   config = {
                     Cmd = [ "${self.outputs.packages.${system}.default}/bin/start-bundle" ];
-                    Env = {
-                      PORT = "3001";
-                    };
+                    Env = [
+                      "PORT=3001"
+                    ];
                     Expose = [ "3001" ];
                   };
                 };
@@ -58,12 +63,15 @@
                   tag = builtins.replaceStrings [ "+" ] [ "_" ] self.packages.${system}.default.version;
                   contents = [
                     self.packages.${system}.default
+                    pkgs.dockerTools.binSh
+                    pkgs.dockerTools.usrBinEnv
+                    pkgs.dockerTools.caCertificates
                   ];
                   config = {
                     Cmd = [ "${self.outputs.packages.${system}.default}/bin/start-${mod}" ];
-                    Env = {
-                      PORT = "3001";
-                    };
+                    Env = [
+                      "PORT=3001"
+                    ];
                     Expose = [ "3001" ];
                   };
                 }
